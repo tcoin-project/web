@@ -39,7 +39,7 @@ const Index = {
         <v-card v-for="tx in stxs">
             <v-card-title>
                 <div style="display:inline-box;width:100%">
-                    <span style="float:left">{{ tx.op }}</span>
+                    <span :style="'float:left;color:' + tx.colorMain">{{ tx.op }}</span>
                     <span :style="'float:right;color:' + tx.color">{{ tx.prefix + showCoin(tx.value) }} TCoin</span>
                 </div>
             </v-card-title>
@@ -76,12 +76,14 @@ const Index = {
         update: function (setnxt = true) {
             api.get('get_account_info/' + this.eaddr).then(response => {
                 this.balance = response.data.data.balance
-                if (this.working && setnxt) setTimeout(this.init, 3000)
+                if (this.working && setnxt) setTimeout(this.update, 3000)
             })
             api.get('explorer/get_account_transactions/' + this.eaddr + '/1').then(response => {
+                const lim = 10
                 const txs = response.data.txs
                 const stxs = []
-                for (let i = 0; i < txs.length && stxs.length < 10; i++) {
+                let addPending = typeof (window.pendingTx) != 'undefined'
+                for (let i = 0; i < txs.length && stxs.length < lim; i++) {
                     const tx = txs[i]
                     if (tx.from == tx.to) continue
                     let op = '', other = ''
@@ -99,9 +101,27 @@ const Index = {
                         op: op,
                         prefix: op == 'Sent' ? '-' : '+',
                         color: op == 'Sent' ? 'rgb(235,55,66)' : 'rgb(33,169,77)',
+                        colorMain: 'black',
                         value: tx.value,
                         addr: other
                     })
+                    if (addPending && tx.hash == window.pendingTx.hash) {
+                        addPending = false
+                        delete window.pendingTx
+                    }
+                }
+                if (addPending) {
+                    stxs.unshift({
+                        op: 'Sending',
+                        prefix: '-',
+                        color: 'rgb(235,165,171)',
+                        colorMain: 'rgb(175,175,175)',
+                        value: window.pendingTx.value,
+                        addr: window.pendingTx.to
+                    })
+                    if (stxs.length > lim) {
+                        stxs.pop()
+                    }
                 }
                 this.stxs = stxs
             })
@@ -149,6 +169,11 @@ const Send = {
                 genTx(this, this.toAddr, intAmount, response.data.data.nonce, this.msg).then(txData => {
                     api.post('submit_tx', { tx: bytesToBase64(txData) }).then(_ => {
                         this.$router.push({ name: 'index' })
+                        window.pendingTx = {
+                            to: this.toAddr,
+                            value: intAmount,
+                            hash: sha256(txData),
+                        }
                     })
                 })
             })
