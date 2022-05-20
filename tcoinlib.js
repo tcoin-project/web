@@ -178,7 +178,9 @@ function showCoin(x) {
     if (x % bn == 0) {
         return (x / bn).toString()
     }
-    return ((x - x % bn) / bn).toString() + '.' + (bn + x % bn).toString().substring(1)
+    res = ((x - x % bn) / bn).toString() + '.' + (bn + x % bn).toString().substring(1)
+    while (res.substring(res.length - 1) == '0') res = res.substring(0, res.length - 1)
+    return res
 }
 
 function formatTime(x) {

@@ -36,6 +36,17 @@ const Index = {
         <h2>Wallet Overview</h2>
         <p> {{ eaddr }} <v-btn text icon small v-on:click="copyTextToClipboard(eaddr)"><v-icon>mdi-content-copy</v-icon></v-btn> </p>
         <p> Balance: {{ showCoin(balance) }} TCoin <v-btn text small @click="send" class="no-upper-case">Send</v-btn></p>
+        <v-card v-for="tx in stxs">
+            <v-card-title>
+                <div style="display:inline-box;width:100%">
+                    <span style="float:left">{{ tx.op }}</span>
+                    <span :style="'float:right;color:' + tx.color">{{ tx.prefix + showCoin(tx.value) }} TCoin</span>
+                </div>
+            </v-card-title>
+            <v-card-subtitle>
+                {{ tx.addr }}
+            </v-card-subtitle>
+        </v-card>
     </v-col>
     `,
     data: function () {
@@ -45,19 +56,56 @@ const Index = {
             addr: '',
             eaddr: '',
             balance: 0,
+            working: false,
+            stxs: [],
         }
     },
     created: function () {
         initWallet(this).then(() => {
-            api.get('get_account_info/' + this.eaddr).then(response => {
-                this.balance = response.data.data.balance
-            })
+            this.working = true
+            this.update()
         })
+    },
+    destroyed: function () {
+        this.working = false
     },
     methods: {
         send: function () {
             this.$router.push({ name: 'send' })
-        }
+        },
+        update: function (setnxt = true) {
+            api.get('get_account_info/' + this.eaddr).then(response => {
+                this.balance = response.data.data.balance
+                if (this.working && setnxt) setTimeout(this.init, 3000)
+            })
+            api.get('explorer/get_account_transactions/' + this.eaddr + '/1').then(response => {
+                const txs = response.data.txs
+                const stxs = []
+                for (let i = 0; i < txs.length && stxs.length < 10; i++) {
+                    const tx = txs[i]
+                    if (tx.from == tx.to) continue
+                    let op = '', other = ''
+                    if (tx.from == 'tcoin2K3n5t4wSaF5mj27Tw9vStXWLWyRjjiH5Cp3CFLpKVCr1d') {
+                        op = 'Mined'
+                        other = 'Miner Reward'
+                    } else if (tx.to == this.eaddr) {
+                        op = 'Received'
+                        other = tx.from
+                    } else {
+                        op = 'Sent'
+                        other = tx.to
+                    }
+                    stxs.push({
+                        op: op,
+                        prefix: op == 'Sent' ? '-' : '+',
+                        color: op == 'Sent' ? 'rgb(235,55,66)' : 'rgb(33,169,77)',
+                        value: tx.value,
+                        addr: other
+                    })
+                }
+                this.stxs = stxs
+            })
+        },
     }
 }
 
