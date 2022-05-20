@@ -1,5 +1,3 @@
-
-
 const api = axios.create({ baseURL: rpcUrl });
 
 const opts = { dark: false };
@@ -36,7 +34,7 @@ const Index = {
     template: `
     <v-col>
         <h2>Wallet Overview</h2>
-        <p> {{ eaddr }} <v-btn text icon small v-on:click="copyAddr"><v-icon>mdi-content-copy</v-icon></v-btn> </p>
+        <p> {{ eaddr }} <v-btn text icon small v-on:click="copyTextToClipboard(eaddr)"><v-icon>mdi-content-copy</v-icon></v-btn> </p>
         <p> Balance: {{ showCoin(balance) }} TCoin <v-btn text small @click="send" class="no-upper-case">Send</v-btn></p>
     </v-col>
     `,
@@ -57,9 +55,6 @@ const Index = {
         })
     },
     methods: {
-        copyAddr: function () {
-            copyTextToClipboard(this.eaddr)
-        },
         send: function () {
             this.$router.push({ name: 'send' })
         }
