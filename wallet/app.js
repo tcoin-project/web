@@ -49,7 +49,11 @@ const Index = {
                     <span :style="'float:right;color:' + tx.color">{{ tx.prefix + showCoin(tx.value) }} TCoin</span>
                 </div>
             </v-card-title>
-            <v-card-subtitle>
+            <v-card-subtitle v-if="tx.op == 'Mined'">
+                {{ tx.addr }}
+                <v-btn text icon small :href="'/explorer/#/block/' + tx.blockid"><v-icon small>mdi-open-in-new</v-icon></v-btn>
+            </v-card-subtitle>
+            <v-card-subtitle v-else>
                 {{ tx.addr }}
                 <v-btn text icon small v-on:click="copyTextToClipboard(tx.addr)"><v-icon small>mdi-content-copy</v-icon></v-btn>
                 <v-btn text icon small :href="'/explorer/#/tx/' + tx.hash"><v-icon small>mdi-open-in-new</v-icon></v-btn>
@@ -115,7 +119,8 @@ const Index = {
                         colorMain: 'black',
                         value: tx.value,
                         addr: other,
-                        hash: tx.hash
+                        hash: tx.hash,
+                        blockid: tx.blockid
                     })
                     if (addPending && tx.hash == window.pendingTx.hash) {
                         addPending = false
@@ -123,15 +128,17 @@ const Index = {
                     }
                     if (typeof (window.msgCache[tx.hash]) == "undefined") {
                         window.msgCache[tx.hash] = ''
-                        api.get('explorer/get_transaction/' + tx.hash).then(resp => {
-                            const tx = decodeTx(base64ToBytes(resp.data.tx))
-                            const msg = showUtf8(tx.data)
-                            const hash = sha256(tx.raw)
-                            if (msg != '') {
-                                window.msgCache[hash] = msg
-                                this.$forceUpdate()
-                            }
-                        })
+                        if (op != 'Mined') {
+                            api.get('explorer/get_transaction/' + tx.hash).then(resp => {
+                                const tx = decodeTx(base64ToBytes(resp.data.tx))
+                                const msg = showUtf8(tx.data)
+                                const hash = sha256(tx.raw)
+                                if (msg != '') {
+                                    window.msgCache[hash] = msg
+                                    this.$forceUpdate()
+                                }
+                            })
+                        }
                     }
                 }
                 if (addPending) {
@@ -142,7 +149,8 @@ const Index = {
                         colorMain: 'rgb(175,175,175)',
                         value: window.pendingTx.value,
                         addr: window.pendingTx.to,
-                        hash: window.pendingTx.hash
+                        hash: window.pendingTx.hash,
+                        blockid: -1
                     })
                     if (stxs.length > lim) {
                         stxs.pop()
