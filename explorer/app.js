@@ -115,9 +115,13 @@ const Account = {
     methods: {
         init: function () {
             this.addr = this.$route.params.addr
+            this.curPage = 1
             api.get('get_account_info/' + this.addr).then(response => {
                 this.info = response.data.data
             })
+            this.fetch()
+        },
+        fetch: function () {
             api.get('explorer/get_account_transactions/' + this.addr + '/' + this.curPage).then(response => {
                 this.txs = response.data.txs
                 this.count = response.data.total
