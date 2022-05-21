@@ -185,11 +185,11 @@ const Block = {
         }
     },
     created: function () {
-        this.param = this.$route.params.p
         this.fetch()
     },
     methods: {
         fetch: function () {
+            this.param = this.$route.params.p
             const apiPath = this.param.length == 64 ? 'explorer/get_block_by_hash' : 'get_block'
             api.get(apiPath + '/' + this.param).then(response => {
                 this.block = decodeBlock(base64ToBytes(response.data.block))
@@ -208,6 +208,10 @@ const Block = {
                 this.txs = utxs
             })
         }
+    },
+    beforeRouteUpdate(_to, _from, next) {
+        next()
+        this.fetch()
     }
 }
 
