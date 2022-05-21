@@ -3,7 +3,8 @@ const api = axios.create({ baseURL: rpcUrl });
 const opts = { dark: false };
 Vue.use(Vuetify);
 
-const resultsPerPage = 100
+const txsPerPage = 100
+const blocksPerPage = 20
 
 Vue.component('address-span', {
     template: `
@@ -88,6 +89,109 @@ Vue.component('tx-list', {
     }
 })
 
+Vue.component('block-list', {
+    template: `
+    <v-simple-table>
+        <thead>
+            <tr>
+                <th class="text-left">Block</th>
+                <th class="text-left">Time</th>
+                <th class="text-left">Txn</th>
+                <th class="text-left">Miner</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr v-for="block in blocks">
+                <td><block-span :height="block.height" showlink="1"></block-span></td>
+                <td> {{ formatTime(block.time) }} </td>
+                <td> {{ block.txs.length }} </td>
+                <td><address-span :addr="encodeAddr(block.miner)" showlink="1" nocopy="1"></address-span></td>
+            </tr>
+        </tbody>
+    </v-simple-table>
+    `,
+    props: ['l', 'r'],
+    data: function () {
+        return {
+            blocks: []
+        }
+    },
+    created: function () {
+        this.fetch()
+    },
+    methods: {
+        fetch: function () {
+            this.blocks = []
+            for (let i = this.r; i >= this.l; i--) {
+                api.get('get_block/' + i).then(response => {
+                    const block = decodeBlock(base64ToBytes(response.data.block))
+                    const height = decodeUint64LE(base64ToBytes(response.data.consensus).slice(0, 8))
+                    block.height = height
+                    if (height < this.l || height > this.r) return;
+                    const l = this.blocks.length
+                    if (!l) {
+                        this.blocks.push(block)
+                    } else if (this.blocks[0].height < height) {
+                        this.blocks.unshift(block)
+                    } else if (this.blocks[l - 1].height > height) {
+                        this.blocks.push(block)
+                    } else {
+                        for (let j = 0; j + 1 < l; j++) {
+                            if (this.blocks[j].height > height && this.blocks[j + 1].height < height) {
+                                this.blocks.splice(j + 1, 0, block)
+                                break
+                            }
+                        }
+                    }
+                })
+            }
+        }
+    },
+    watch: {
+        l: function () {
+            this.fetch()
+        }
+    }
+})
+
+Vue.component('search-box', {
+    template: `
+    <v-text-field
+        v-model="search"
+        label="Search for block height / block hash / tx hash / adresss"
+        append-outer-icon="mdi-magnify"
+        @click:append-outer="doSearch"
+        @keydown="keydown"
+    ></v-text-field>
+    `,
+    data: function () {
+        return {
+            search: '',
+        }
+    },
+    props: ['header'],
+    methods: {
+        doSearch: function () {
+            if (this.search.startsWith('tcoin')) {
+                this.$router.push({ name: 'account', params: { 'addr': this.search } })
+            } else if (this.search.length != 64) {
+                this.$router.push({ name: 'block', params: { 'p': this.search } })
+            } else {
+                api.get('explorer/get_transaction/' + this.search).then(response => {
+                    if (response.data.status) {
+                        this.$router.push({ name: 'tx', params: { 'txh': this.search } })
+                    } else {
+                        this.$router.push({ name: 'block', params: { 'p': this.search } })
+                    }
+                })
+            }
+        },
+        keydown: function (e) {
+            if (e.key == 'Enter') this.doSearch()
+        }
+    }
+})
+
 const Account = {
     template: `
     <v-col>
@@ -95,8 +199,8 @@ const Account = {
         <p> Balance: {{ showCoin(info.balance) }} TCoin </p>
         <p> Nonce: {{ info.nonce }} </p>
         <tx-list :txs="txs" :selfaddr="addr"></tx-list>
-		<div class="text-center" v-if="count > resultsPerPage">
-			<v-pagination v-model="curPage" :length="Math.ceil(count / resultsPerPage)" @input="fetch"></v-pagination>
+		<div class="text-center" v-if="count > txsPerPage">
+			<v-pagination v-model="curPage" :length="Math.ceil(count / txsPerPage)" @input="fetch"></v-pagination>
 		</div>
     </v-col>
     `,
@@ -219,24 +323,66 @@ const Block = {
     }
 }
 
-const Index = {
+const Blocks = {
     template: `
     <v-col>
-        <v-text-field
-            v-model="search"
-            label="Search for block height / block hash / tx hash / adresss"
-            append-outer-icon="mdi-magnify"
-            @click:append-outer="doSearch"
-            @keydown="keydown"
-        ></v-text-field>
-        <p><b>Latest Block</b> <block-span :height="height" showlink="1"></block-span> {{ toHex(block.hash) }} </p>
+        <p><b>Block</b> {{ l }} ~ {{ r }} </p>
+        <block-list :l="l" :r="r"></block-list>
+		<div class="text-center" v-if="count > blocksPerPage">
+			<v-pagination v-model="curPage" :length="Math.ceil(count / blocksPerPage)" @input="fetch"></v-pagination>
+		</div>
     </v-col>
     `,
     data: function () {
         return {
-            search: '',
+            r: -1,
+            curPage: 0,
+            count: 0
+        }
+    },
+    computed: {
+        l: function () {
+            return Math.max(0, this.r - blocksPerPage + 1)
+        }
+    },
+    created: function () {
+        this.init()
+    },
+    methods: {
+        init: function () {
+            const tmp = parseInt(this.$route.params.r)
+            api.get('get_highest').then(response => {
+                this.count = decodeUint64LE(base64ToBytes(response.data.consensus).slice(0, 8)) + 1
+                this.curPage = Math.floor((this.count - tmp) / blocksPerPage) + 1
+                this.fetch()
+            })
+        },
+        fetch: function () {
+            this.r = this.count - 1 - blocksPerPage * (this.curPage - 1)
+            this.$router.push({ name: 'blocks', params: { r: this.r } })
+        }
+    },
+    beforeRouteUpdate(_to, _from, next) {
+        next()
+        this.init()
+    }
+}
+
+const Index = {
+    template: `
+    <v-col>
+        <p><b>Latest Blocks</b></p>
+        <block-list :l="bl" :r="br"></block-list>
+        <p></p>
+        <p><v-btn class="no-upper-case" outlined @click="gotoBlocks"> View all blocks </v-btn></p>
+    </v-col>
+    `,
+    data: function () {
+        return {
             height: 0,
             block: '',
+            bl: 0,
+            br: -1
         }
     },
     created: function () {
@@ -247,25 +393,12 @@ const Index = {
             api.get('get_highest').then(response => {
                 this.block = decodeBlock(base64ToBytes(response.data.block))
                 this.height = decodeUint64LE(base64ToBytes(response.data.consensus).slice(0, 8))
+                this.bl = this.height - 4
+                this.br = this.height
             })
         },
-        doSearch: function () {
-            if (this.search.startsWith('tcoin')) {
-                this.$router.push({ name: 'account', params: { 'addr': this.search } })
-            } else if (this.search.length != 64) {
-                this.$router.push({ name: 'block', params: { 'p': this.search } })
-            } else {
-                api.get('explorer/get_transaction/' + this.search).then(response => {
-                    if (response.data.status) {
-                        this.$router.push({ name: 'tx', params: { 'txh': this.search } })
-                    } else {
-                        this.$router.push({ name: 'block', params: { 'p': this.search } })
-                    }
-                })
-            }
-        },
-        keydown: function (e) {
-            if (e.key == 'Enter') this.doSearch()
+        gotoBlocks: function () {
+            this.$router.push({ name: 'blocks', params: { r: this.br } })
         }
     }
 }
@@ -277,6 +410,7 @@ const router = new VueRouter({
         { path: '/account/:addr', component: Account, name: 'account' },
         { path: '/tx/:txh', component: Transaction, name: 'tx' },
         { path: '/block/:p', component: Block, name: 'block' },
+        { path: '/blocks/:r', component: Blocks, name: 'blocks' },
     ]
 })
 
