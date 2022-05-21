@@ -110,22 +110,23 @@ const Account = {
         }
     },
     created: function () {
-        this.addr = this.$route.params.addr
-        this.fetch()
         this.init()
     },
     methods: {
-        fetch: function () {
+        init: function () {
+            this.addr = this.$route.params.addr
+            api.get('get_account_info/' + this.addr).then(response => {
+                this.info = response.data.data
+            })
             api.get('explorer/get_account_transactions/' + this.addr + '/' + this.curPage).then(response => {
                 this.txs = response.data.txs
                 this.count = response.data.total
             })
-        },
-        init: function () {
-            api.get('get_account_info/' + this.addr).then(response => {
-                this.info = response.data.data
-            })
         }
+    },
+    beforeRouteUpdate(_to, _from, next) {
+        next()
+        this.init()
     }
 }
 
