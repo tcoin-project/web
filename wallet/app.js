@@ -50,7 +50,7 @@ const Index = {
                 </div>
             </v-card-title>
             <v-card-subtitle v-if="tx.op == 'Mined'">
-                {{ tx.addr }}
+                Miner Reward of Block {{ tx.blockid }}
                 <v-btn text icon small :href="'/explorer/#/block/' + tx.blockid"><v-icon small>mdi-open-in-new</v-icon></v-btn>
             </v-card-subtitle>
             <v-card-subtitle v-else>
@@ -104,7 +104,6 @@ const Index = {
                     let op = '', other = ''
                     if (tx.from == 'tcoin2K3n5t4wSaF5mj27Tw9vStXWLWyRjjiH5Cp3CFLpKVCr1d') {
                         op = 'Mined'
-                        other = 'Miner Reward'
                     } else if (tx.to == this.eaddr) {
                         op = 'Received'
                         other = tx.from
