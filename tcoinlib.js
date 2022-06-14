@@ -87,7 +87,7 @@ async function genTx(x, toAddr, amount, nonce, msg) {
     const signData = new Uint8Array([
         ...decodeAddr(toAddr),
         ...encodeUint64BE(amount),
-        ...encodeUint64BE(0),
+        ...encodeUint64BE(100000),
         ...encodeUint64BE(0),
         ...encodeUint64BE(nonce),
         ...msgEnc
