@@ -109,24 +109,34 @@ async function genTx(x, toAddr, amount, nonce, msg) {
 
 function readTx(s, cur) {
     const oldCur = cur
-    cur++
+    const tp = s[cur++]
     const pubkey = s.slice(cur, cur + 32)
     cur += 32
     const sig = s.slice(cur, cur + 64)
     cur += 64
-    const toAddr = s.slice(cur, cur + 32)
-    cur += 32
-    const [cur1, value] = decodeUvarint(s, cur)
-    const [cur2, gasLimit] = decodeUvarint(s, cur1)
+    var toAddr1, value1
+    if (tp == 1) {
+        const toAddr = s.slice(cur, cur + 32)
+        cur += 32
+        const [cur1, value] = decodeUvarint(s, cur)
+        cur = cur1
+        toAddr1 = toAddr
+        value1 = value
+    } else {
+        toAddr1 = new Uint8Array(32)
+        value1 = 0
+    }
+    const [cur2, gasLimit] = decodeUvarint(s, cur)
     const [cur3, fee] = decodeUvarint(s, cur2)
     const [cur4, nonce] = decodeUvarint(s, cur3)
     const [cur5, dataLen] = decodeUvarint(s, cur4)
     return [{
+        type: tp,
         pubkey: pubkey,
         sig: sig,
         fromAddr: getAddr(pubkey),
-        toAddr: toAddr,
-        value: value,
+        toAddr: toAddr1,
+        value: value1,
         gasLimit: gasLimit,
         fee: fee,
         nonce: nonce,
