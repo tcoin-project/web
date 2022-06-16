@@ -1,9 +1,19 @@
-const api = axios.create({ baseURL: rpcUrl });
+const api = axios.create({ baseURL: 'https://tcrpc2.mcfx.us/' });
 
 const opts = { dark: false };
 Vue.use(Vuetify);
 
 window.msgCache = {}
+
+async function initWallet(x) {
+    if (!localStorage.privkey) {
+        x.$router.push({ name: 'create_wallet' })
+    }
+    x.privkey = fromHex(localStorage.privkey)
+    x.pubkey = await nobleEd25519.getPublicKey(x.privkey)
+    x.addr = tcoin.pubkeyToAddr(x.pubkey)
+    x.eaddr = tcoin.encodeAddr(x.addr)
+}
 
 const CreateWallet = {
     template: `
@@ -41,12 +51,12 @@ const Index = {
             <v-btn text icon small v-on:click="copyTextToClipboard(eaddr)"><v-icon>mdi-content-copy</v-icon></v-btn>
             <v-btn text icon small :href="'/explorer/#/account/' + eaddr"><v-icon>mdi-open-in-new</v-icon></v-btn>
         </p>
-        <p> Balance: {{ showCoin(balance) }} TCoin <v-btn text small @click="send" class="no-upper-case">Send</v-btn></p>
+        <p> Balance: {{ tcoin.utils.showCoin(balance) }} TCoin <v-btn text small @click="send" class="no-upper-case">Send</v-btn></p>
         <v-card v-for="tx in stxs">
             <v-card-title>
                 <div style="display:inline-box;width:100%">
                     <span :style="'float:left;color:' + tx.colorMain">{{ tx.op }}</span>
-                    <span :style="'float:right;color:' + tx.color">{{ tx.prefix + showCoin(tx.value) }} TCoin</span>
+                    <span :style="'float:right;color:' + tx.color">{{ tx.prefix + tcoin.utils.showCoin(tx.value) }} TCoin</span>
                 </div>
             </v-card-title>
             <v-card-subtitle v-if="tx.op == 'Mined'">
@@ -129,8 +139,8 @@ const Index = {
                         window.msgCache[tx.hash] = ''
                         if (op != 'Mined') {
                             api.get('explorer/get_transaction/' + tx.hash).then(resp => {
-                                const tx = decodeTx(base64ToBytes(resp.data.tx))
-                                const msg = showUtf8(tx.data)
+                                const tx = tcoin.decodeTx(base64ToBytes(resp.data.tx))
+                                const msg = tcoin.utils.showUtf8(tx.data)
                                 const hash = sha256(tx.raw)
                                 if (msg != '') {
                                     window.msgCache[hash] = msg
@@ -189,7 +199,7 @@ const Send = {
         addrCheck: function () {
             if (this.toAddr == '') return 'recipient cannot be empty'
             try {
-                decodeAddr(this.toAddr)
+                tcoin.decodeAddr(this.toAddr)
             } catch (e) {
                 return e
             }
@@ -198,7 +208,22 @@ const Send = {
         submit: function () {
             const intAmount = Math.floor(this.amount * 1000000000)
             api.get('get_account_info/' + this.eaddr).then(response => {
-                genTx(this, this.toAddr, intAmount, response.data.data.nonce, this.msg).then(txData => {
+                const enc = new TextEncoder()
+                const msgEnc = enc.encode(this.msg)
+                const tx = {
+                    type: 1,
+                    pubkey: this.pubkey,
+                    toAddr: tcoin.decodeAddr(this.toAddr),
+                    value: intAmount,
+                    gasLimit: 40000 + msgEnc.length,
+                    fee: 0,
+                    nonce: response.data.data.nonce,
+                    data: msgEnc
+                }
+                tcoin.signTx(tx, this.privkey).then(sig => {
+                    tx.sig = sig
+                    const txData = tcoin.encodeTx(tx)
+                    console.log(toHex(txData))
                     api.post('submit_tx', { tx: bytesToBase64(txData) }).then(_ => {
                         this.$router.push({ name: 'index' })
                         const hash = sha256(txData)
