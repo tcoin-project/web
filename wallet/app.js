@@ -281,10 +281,12 @@ const Inject = {
     },
     created: function () {
         initWallet(this)
-        this.origin = window.opener.origin
-        const enc = new TextEncoder()
-        this.hexOrigin = toHex(enc.encode(this.origin))
         window.addEventListener("message", (event) => {
+            if (this.hexOrigin == '') {
+                this.origin = event.origin
+                const enc = new TextEncoder()
+                this.hexOrigin = toHex(enc.encode(this.origin))
+            }
             if (event.origin != this.origin) return
             if (event.data.target != 'tcoin-wallet') return
             const data = event.data.data
@@ -297,10 +299,10 @@ const Inject = {
                 }
             } else if (method == 'disconnect') {
                 document.cookie = 'allow_' + this.hexOrigin + '=1;expires=Thu, 01 Jan 1970 00:00:01 GMT'
-                window.opener.postMessage({ target: 'tcoin-wallet', data: { method: 'disconnect' } })
+                window.opener.postMessage({ target: 'tcoin-wallet', data: { method: 'disconnect' } }, this.origin)
             } else if (method == 'approve') {
                 if (!this.allowed())
-                    window.opener.postMessage({ target: 'tcoin-wallet', data: { method: 'error', arg: 'wallet not connected' } })
+                    window.opener.postMessage({ target: 'tcoin-wallet', data: { method: 'error', arg: 'wallet not connected' } }, this.origin)
                 const tx = {
                     type: parseInt(arg.type),
                     pubkey: this.pubkey,
@@ -317,21 +319,23 @@ const Inject = {
             this.method = method
         }, false)
         window.onbeforeunload = function () {
-            window.opener.postMessage({ target: 'tcoin-wallet', data: { method: 'unload' } })
+            window.opener.postMessage({ target: 'tcoin-wallet', data: { method: 'unload' } }, this.origin)
         }
-        window.opener.postMessage({ target: 'tcoin-wallet', data: { method: 'load' } })
+        window.opener.postMessage({ target: 'tcoin-wallet', data: { method: 'load' } }, '*')
     },
     methods: {
         purifyUint8Array: function (s) {
             return fromHex(toHex(s))
         },
         allowed: function () {
-            return getCookie('allow_' + this.hexOrigin) == '1'
+            return this.hexOrigin != '' && getCookie('allow_' + this.hexOrigin) == '1'
         },
         connectConfirm: function () {
-            document.cookie = 'allow_' + this.hexOrigin + '=1'
-            window.opener.postMessage({ target: 'tcoin-wallet', data: { method: 'connect', arg: this.eaddr } })
-            window.close()
+            if (this.hexOrigin != '') {
+                document.cookie = 'allow_' + this.hexOrigin + '=1'
+                window.opener.postMessage({ target: 'tcoin-wallet', data: { method: 'connect', arg: this.eaddr } }, this.origin)
+                window.close()
+            }
         },
         approveConfirm: function () {
             tcoin.getNonce(this.eaddr).then(nonce => {
@@ -339,7 +343,7 @@ const Inject = {
                 tx.nonce = nonce
                 tcoin.signTx(tx, this.privkey).then(sig => {
                     tx.sig = sig
-                    window.opener.postMessage({ target: 'tcoin-wallet', data: { method: 'approve', arg: tx } })
+                    window.opener.postMessage({ target: 'tcoin-wallet', data: { method: 'approve', arg: tx } }, this.origin)
                 })
             })
         },

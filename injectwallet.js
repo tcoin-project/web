@@ -21,7 +21,7 @@ const wallet = (function () {
         const method = data.method
         const arg = data.arg
         if (method == 'load') {
-            popup.postMessage(currentRequest)
+            popup.postMessage(currentRequest, walletOrigin)
             return
         }
         if (method == 'unload') {
