@@ -139,7 +139,7 @@ const Index = {
                         window.msgCache[tx.hash] = ''
                         if (op != 'Mined') {
                             tcoin.getTransactionByHash(tx.hash).then(tx => {
-                                const msg = tcoin.utils.showUtf8(tx.data)
+                                const msg = tx.type == 1 ? tcoin.utils.showUtf8(tx.data) : 'Code execution'
                                 const hash = sha256(tx.raw)
                                 if (msg != '') {
                                     window.msgCache[hash] = msg
@@ -258,7 +258,7 @@ const Inject = {
                 <p v-if="tx.data"> with message {{ tcoin.utils.showUtf8(tx.data) }} </p>
             </div>
             <div v-if="tx.type == 2">
-                <p> execute code </p>
+                execute code
                 <v-textarea :value="toHex(tx.data)" rows="1" auto-grow no-resize readonly></v-textarea>
             </div>
             <p> Expected gas usage: {{ tx.gasLimit }} </p>

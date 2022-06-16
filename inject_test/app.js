@@ -6,32 +6,37 @@ Vue.use(Vuetify);
 const Index = {
     template: `
     <v-col>
-        <p><v-btn class="no-upper-case" outlined @click="run"> Test </v-btn></p>
-        <p><v-btn class="no-upper-case" outlined @click="run2"> Test2 </v-btn></p>
-        <p><v-btn class="no-upper-case" outlined @click="run3"> Test3 </v-btn></p>
+        <p><v-btn class="no-upper-case" outlined @click="connect"> Connect Wallet </v-btn></p>
+        <p><v-btn class="no-upper-case" outlined @click="disconnect"> Disconnect Wallet </v-btn></p>
+        <p><v-btn class="no-upper-case" outlined @click="deposit"> Deposit 1 TCoin to WTCoin </v-btn></p>
+        <p><v-btn class="no-upper-case" outlined @click="withdraw"> Withdraw 1 TCoin to WTCoin </v-btn></p>
     </v-col>
     `,
-    data: function () {
-        return {
-        }
-    },
-    created: function () {
-    },
     methods: {
-        run: function () {
+        connect: function () {
             wallet.connect().then(addr => {
                 console.log(addr)
             })
         },
-        run2: function () {
+        disconnect: function () {
             wallet.disconnect()
         },
-        run3: function () {
+        deposit: function () {
             wallet.approve({
-                type: 1,
-                toAddr: tcoin.decodeAddr('tcoin33YNRFhkr5r5PGRmi4VRfxK6wWW6bAiAjtgw5zRSw4YGKa'),
-                value: 233,
-                data: new Uint8Array([48, 49, 50]),
+                type: 2,
+                toAddr: tcoin.decodeAddr('tcoin2K3n5t4wSaF5mj27Tw9vStXWLWyRjjiH5Cp3CFLpKVCr1d'),
+                value: 0,
+                data: fromHex('138400001705000013058505930280fb93d21200e7800200930405006f00400013850400b7d5896f9b85956113060000b7d69a3b9b8606a037d79a3b1b0707a0930701b513888700930200fb93d21200e7800200930004006780000071149a92dfbd9be935292722045f9db6b6bcba6d7c09ffb191d8d9b4ea04a46c'),
+            }).then(tx => {
+                tcoin.sendTransaction(tx)
+            })
+        },
+        withdraw: function () {
+            wallet.approve({
+                type: 2,
+                toAddr: tcoin.decodeAddr('tcoin2K3n5t4wSaF5mj27Tw9vStXWLWyRjjiH5Cp3CFLpKVCr1d'),
+                value: 0,
+                data: fromHex('138400001705000013058503930280fb93d21200e7800200930405006f0040003715f9511b058509b7d59a3b9b8505a0e7800400930004006780000071149a92dfbd9be935292722045f9db6b6bcba6d7c09ffb191d8d9b4ea04a46c'),
             }).then(tx => {
                 tcoin.sendTransaction(tx)
             })

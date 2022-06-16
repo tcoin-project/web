@@ -186,9 +186,12 @@ const TCoin = function (rpcUrl) {
             if (tx.type == 1) {
                 return 40000 + tx.data.length
             }
-            api.post('estimate_gas', { origin: pubkeyToAddr(tx.pubkey), code: bytesToBase64(tx.data) }).then(response => {
-                return response.data.gas
-            })
+            const response = await api.post('estimate_gas', { origin: this.encodeAddr(pubkeyToAddr(tx.pubkey)), code: bytesToBase64(tx.data) })
+            return response.data.gas
+        },
+        runViewCode: async function (origin, code) {
+            const response = await api.post('run_view_raw_code', { origin: origin, code: code })
+            return { data: base64ToBytes(response.data.data), error: response.data.error }
         },
         getAccountInfo: async function (addr) {
             const response = await api.get('get_account_info/' + addr)
