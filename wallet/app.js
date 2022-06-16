@@ -99,13 +99,13 @@ const Index = {
             this.$router.push({ name: 'send' })
         },
         update: function (setnxt = true) {
-            api.get('get_account_info/' + this.eaddr).then(response => {
-                this.balance = response.data.data.balance
+            tcoin.getBalance(this.eaddr).then(balance => {
+                this.balance = balance
                 if (this.working && setnxt) setTimeout(this.update, 3000)
             })
-            api.get('explorer/get_account_transactions/' + this.eaddr + '/1').then(response => {
+            tcoin.getAccountTransactions(this.eaddr, 1).then(data => {
                 const lim = 10
-                const txs = response.data.txs
+                const txs = data.txs
                 const stxs = []
                 let addPending = typeof (window.pendingTx) != 'undefined'
                 for (let i = 0; i < txs.length && stxs.length < lim; i++) {
@@ -138,8 +138,7 @@ const Index = {
                     if (typeof (window.msgCache[tx.hash]) == "undefined") {
                         window.msgCache[tx.hash] = ''
                         if (op != 'Mined') {
-                            api.get('explorer/get_transaction/' + tx.hash).then(resp => {
-                                const tx = tcoin.decodeTx(base64ToBytes(resp.data.tx))
+                            tcoin.getTransactionByHash(tx.hash).then(tx => {
                                 const msg = tcoin.utils.showUtf8(tx.data)
                                 const hash = sha256(tx.raw)
                                 if (msg != '') {
@@ -207,7 +206,7 @@ const Send = {
         },
         submit: function () {
             const intAmount = Math.floor(this.amount * 1000000000)
-            api.get('get_account_info/' + this.eaddr).then(response => {
+            tcoin.getNonce(this.eaddr).then(nonce => {
                 const enc = new TextEncoder()
                 const msgEnc = enc.encode(this.msg)
                 const tx = {
@@ -217,14 +216,13 @@ const Send = {
                     value: intAmount,
                     gasLimit: 40000 + msgEnc.length,
                     fee: 0,
-                    nonce: response.data.data.nonce,
+                    nonce: nonce,
                     data: msgEnc
                 }
                 tcoin.signTx(tx, this.privkey).then(sig => {
                     tx.sig = sig
                     const txData = tcoin.encodeTx(tx)
-                    console.log(toHex(txData))
-                    api.post('submit_tx', { tx: bytesToBase64(txData) }).then(_ => {
+                    tcoin.sendTransaction(tx).then(_ => {
                         this.$router.push({ name: 'index' })
                         const hash = sha256(txData)
                         window.pendingTx = {
@@ -240,12 +238,124 @@ const Send = {
     }
 }
 
+const Inject = {
+    template: `
+    <v-col>
+        <div v-if="method == 'connect'">
+            <h2>Connect</h2>
+            <p> Are you sure to connect wallet </p>
+            <p> {{ eaddr }} </p>
+            <p> to {{ origin }}? </p>
+            <v-btn class="no-upper-case" outlined @click="connectConfirm"> Connect </v-btn>
+            <v-btn class="no-upper-case" outlined @click="cancel"> Cancel </v-btn>
+        </div>
+        <div v-if="method == 'approve'">
+            <h2>Approve transaction</h2>
+            <p> {{ origin }} wants to </p>
+            <div v-if="tx.type == 1">
+                <p> send {{ tcoin.utils.showCoin(tx.value) }} TCoin </p>
+                <p> to {{ tcoin.encodeAddr(tx.toAddr) }} </p>
+                <p v-if="tx.data"> with message {{ tcoin.utils.showUtf8(tx.data) }} </p>
+            </div>
+            <div v-if="tx.type == 2">
+                <p> execute code </p>
+                <v-textarea :value="toHex(tx.data)" rows="1" auto-grow no-resize readonly></v-textarea>
+            </div>
+            <p> Expected gas usage: {{ tx.gasLimit }} </p>
+            <v-btn class="no-upper-case" outlined @click="approveConfirm"> Confirm </v-btn>
+            <v-btn class="no-upper-case" outlined @click="cancel"> Reject </v-btn>
+        </div>
+    </v-col>
+    `,
+    data: function () {
+        return {
+            privkey: '',
+            pubkey: '',
+            addr: '',
+            eaddr: '',
+            origin: '',
+            hexOrigin: '',
+            method: '',
+            tx: '',
+        }
+    },
+    created: function () {
+        initWallet(this)
+        this.origin = window.opener.origin
+        const enc = new TextEncoder()
+        this.hexOrigin = toHex(enc.encode(this.origin))
+        window.addEventListener("message", (event) => {
+            if (event.origin != this.origin) return
+            if (event.data.target != 'tcoin-wallet') return
+            const data = event.data.data
+            const method = data.method
+            const arg = data.arg
+            if (this.method != '') return
+            if (method == 'connect') {
+                if (this.allowed()) {
+                    this.connectConfirm()
+                }
+            } else if (method == 'disconnect') {
+                document.cookie = 'allow_' + this.hexOrigin + '=1;expires=Thu, 01 Jan 1970 00:00:01 GMT'
+                window.opener.postMessage({ target: 'tcoin-wallet', data: { method: 'disconnect' } }, this.origin)
+            } else if (method == 'approve') {
+                if (!this.allowed())
+                    window.opener.postMessage({ target: 'tcoin-wallet', data: { method: 'error', arg: 'wallet not connected' } }, this.origin)
+                const tx = {
+                    type: parseInt(arg.type),
+                    pubkey: this.pubkey,
+                    toAddr: this.purifyUint8Array(arg.toAddr),
+                    value: parseInt(arg.value),
+                    fee: 0,
+                    data: this.purifyUint8Array(arg.data),
+                }
+                tcoin.estimateGas(tx).then(gas => {
+                    tx.gasLimit = gas
+                    this.tx = tx
+                })
+            }
+            this.method = method
+        }, false)
+        window.onbeforeunload = function () {
+            window.opener.postMessage({ target: 'tcoin-wallet', data: { method: 'unload' } }, this.origin)
+        }
+        window.opener.postMessage({ target: 'tcoin-wallet', data: { method: 'load' } }, this.origin)
+    },
+    methods: {
+        purifyUint8Array: function (s) {
+            return fromHex(toHex(s))
+        },
+        allowed: function () {
+            return getCookie('allow_' + this.hexOrigin) == '1'
+        },
+        connectConfirm: function () {
+            document.cookie = 'allow_' + this.hexOrigin + '=1'
+            window.opener.postMessage({ target: 'tcoin-wallet', data: { method: 'connect', arg: this.eaddr } }, this.origin)
+            window.close()
+        },
+        approveConfirm: function () {
+            tcoin.getNonce(this.eaddr).then(nonce => {
+                const tx = this.tx
+                tx.nonce = nonce
+                tcoin.signTx(tx, this.privkey).then(sig => {
+                    tx.sig = sig
+                    window.opener.postMessage({ target: 'tcoin-wallet', data: { method: 'approve', arg: tx } }, this.origin)
+                })
+            })
+        },
+        cancel: function () {
+            window.close()
+        }
+    }
+}
+
 const router = new VueRouter({
     mode: 'hash',
     routes: [
         { path: '/', component: Index, name: 'index' },
         { path: '/create', component: CreateWallet, name: 'create_wallet' },
         { path: '/send', component: Send, name: 'send' },
+        { path: '/inject', component: Inject, name: 'inject' },
     ]
 })
 

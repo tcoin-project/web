@@ -220,15 +220,15 @@ const Account = {
         init: function () {
             this.addr = this.$route.params.addr
             this.curPage = 1
-            api.get('get_account_info/' + this.addr).then(response => {
-                this.info = response.data.data
+            tcoin.getAccountInfo(this.addr).then(info => {
+                this.info = info
             })
             this.fetch()
         },
         fetch: function () {
-            api.get('explorer/get_account_transactions/' + this.addr + '/' + this.curPage).then(response => {
-                this.txs = response.data.txs
-                this.count = response.data.total
+            tcoin.getAccountTransactions(this.addr, this.curPage).then(data => {
+                this.txs = data.txs
+                this.count = data.total
             })
         }
     },
@@ -242,7 +242,7 @@ const Transaction = {
     template: `
     <v-col>
         <p><b>Transaction</b> {{ txh }}</p>
-        <p> Type: {{ tx.type == 1 ? "transfer" : "contract call" }} </p>
+        <p> Type: {{ tx.type == 1 ? "transfer" : "code execution" }} </p>
         <p> Block: <block-span :height="height" showlink="1"></block-span></p>
         <p> From: <address-span :addr="tcoin.encodeAddr(tx.fromAddr)" showlink="1"></address-span></p>
         <div v-if="tx.type == 1">

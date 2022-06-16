@@ -1,4 +1,5 @@
-const tcoin = (function () {
+const TCoin = function (rpcUrl) {
+    const api = axios.create({ baseURL: rpcUrl || 'https://tcrpc2.mcfx.us/' });
     const alphabet = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
 
     function pubkeyToAddr(pubkey) {
@@ -181,6 +182,36 @@ const tcoin = (function () {
                 txs: txs
             }
         },
+        estimateGas: async function (tx) {
+            if (tx.type == 1) {
+                return 40000 + tx.data.length
+            }
+            api.post('estimate_gas', { origin: pubkeyToAddr(tx.pubkey), code: bytesToBase64(tx.data) }).then(response => {
+                return response.data.gas
+            })
+        },
+        getAccountInfo: async function (addr) {
+            const response = await api.get('get_account_info/' + addr)
+            return response.data.data
+        },
+        getBalance: async function (addr) {
+            return (await this.getAccountInfo(addr)).balance
+        },
+        getNonce: async function (addr) {
+            return (await this.getAccountInfo(addr)).nonce
+        },
+        sendTransaction: async function (tx) {
+            const txData = this.encodeTx(tx)
+            return await api.post('submit_tx', { tx: bytesToBase64(txData) })
+        },
+        getAccountTransactions: async function (addr, page) {
+            const response = await api.get('explorer/get_account_transactions/' + addr + '/' + page)
+            return response.data
+        },
+        getTransactionByHash: async function (txh) {
+            const response = await api.get('explorer/get_transaction/' + txh)
+            return this.decodeTx(base64ToBytes(response.data.tx))
+        },
         utils: {
             showCoin: function (x) {
                 const bn = 1000000000
@@ -204,4 +235,6 @@ const tcoin = (function () {
             decodeUint64LE: decodeUint64LE
         }
     }
-}());
+}
+
+const tcoin = TCoin()
