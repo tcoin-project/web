@@ -1,6 +1,5 @@
 const wallet = (function () {
-    const walletUrl = 'http://127.0.0.1:8000/wallet/#/inject'
-    //const walletUrl = 'https://portal.tcoin.dev/wallet/#/inject'
+    const walletUrl = 'https://portal.tcoin.dev/wallet/#/inject'
     const walletOrigin = walletUrl.substring(0, walletUrl.indexOf('/', 7))
     var popup, currentPromise, currentRequest
 
