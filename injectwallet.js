@@ -1,6 +1,6 @@
 const wallet = (function () {
     const walletUrl = 'https://portal.tcoin.dev/wallet/#/inject'
-    const walletOrigin = walletUrl.substring(0, walletUrl.indexOf('/', 7))
+    const walletOrigin = walletUrl.substring(0, walletUrl.indexOf('/', 8))
     var popup, currentPromise, currentRequest
 
     function checkReset(msg) {
