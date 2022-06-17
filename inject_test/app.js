@@ -14,20 +14,20 @@ const Index = {
         </div>
         <p> Wallet Balance: {{ tcoin.utils.showCoin(balance) }} TCoin </p>
         <p> Wrapped Balance: {{ tcoin.utils.showCoin(wbalance) }} WTCoin </p>
+        <v-text-field v-model="toAddr" label="Recipient address"></v-text-field>
         <v-text-field v-model="amount" label="Amount" suffix="TCoin"></v-text-field>
         <p>
             <v-btn class="no-upper-case" outlined @click="wrap"> Wrap </v-btn>
             <v-btn class="no-upper-case" outlined @click="unwrap"> Unwrap </v-btn>
+            <v-btn class="no-upper-case" outlined @click="send"> Send </v-btn>
         </p>
-        <!--<p><v-btn class="no-upper-case" outlined @click="connect"> Connect Wallet </v-btn></p>
-        <p><v-btn class="no-upper-case" outlined @click="disconnect"> Disconnect Wallet </v-btn></p>
-        <p><v-btn class="no-upper-case" outlined @click="withdraw"> Withdraw 1 TCoin to WTCoin </v-btn></p>-->
     </v-col>
     `,
     data: function () {
         return {
             wtcoin: 'tcoin2te7Jd2FURuw8VR96gdZd2qbCerSSUb7dnLAPAyS7sGLDM',
             addr: '',
+            toAddr: '',
             balance: 0,
             wbalance: 0,
             amount: 0,
@@ -75,6 +75,17 @@ const Index = {
         },
         unwrap: function () {
             const code = codegen.genWorker('write', this.wtcoin, 'burn', 'ii', 0, [this.intAmount])
+            this.$refs.wallet.approve({
+                type: 2,
+                toAddr: tcoin.nullAddr,
+                value: 0,
+                data: code,
+            }).then(tx => {
+                tcoin.sendTransaction(tx)
+            })
+        },
+        send: function () {
+            const code = codegen.genWorker('write', this.wtcoin, 'transfer', 'iai', 0, [this.toAddr, this.intAmount])
             this.$refs.wallet.approve({
                 type: 2,
                 toAddr: tcoin.nullAddr,
