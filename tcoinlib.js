@@ -575,7 +575,7 @@ const codegen = (function () {
                     throw new Error(lin.op + ' not implemented in phase 2', lin.op)
             }
         }
-        console.log(rest)
+        //console.log(rest)
         const res = []
         for (const k of rest) {
             res.push(...int32ToBytes(k))

@@ -5,6 +5,16 @@ Vue.use(Vuetify);
 
 window.msgCache = {}
 
+function showToken(x, decimals) {
+    const base = Math.pow(10, decimals)
+    if (x % base == 0) {
+        return (x / base).toString()
+    }
+    res = ((x - x % base) / base).toString() + '.' + (base + x % base).toString().substring(1)
+    while (res.substring(res.length - 1) == '0') res = res.substring(0, res.length - 1)
+    return res
+}
+
 async function initWallet(x) {
     if (!localStorage.privkey) {
         x.$router.push({ name: 'create_wallet' })
@@ -51,7 +61,16 @@ const Index = {
             <v-btn text icon small v-on:click="copyTextToClipboard(eaddr)"><v-icon>mdi-content-copy</v-icon></v-btn>
             <v-btn text icon small :href="'/explorer/#/account/' + eaddr"><v-icon>mdi-open-in-new</v-icon></v-btn>
         </p>
-        <p> Balance: {{ tcoin.utils.showCoin(balance) }} TCoin <v-btn text small @click="send" class="no-upper-case">Send</v-btn></p>
+        <p>
+            Balance: {{ tcoin.utils.showCoin(balance) }} TCoin
+            <v-btn text small @click="send" class="no-upper-case">Send</v-btn>
+            <v-btn text small @click="addToken" class="no-upper-case">Add Token</v-btn>
+        </p>
+        <p v-for="(token, i) in tokens">
+            {{ token.name }}: {{ showToken(tokenBalances[i], token.decimals) }} {{ token.symbol }}
+            <v-btn text small @click="sendToken(token)" class="no-upper-case">Send</v-btn>
+            <v-btn text small @click="hideToken(i)" class="no-upper-case">Hide</v-btn>
+        </p>
         <v-card v-for="tx in stxs">
             <v-card-title>
                 <div style="display:inline-block;width:100%">
@@ -83,9 +102,13 @@ const Index = {
             balance: 0,
             working: false,
             stxs: [],
+            tokens: [],
+            tokenBalances: [],
         }
     },
     created: function () {
+        this.tokens = JSON.parse(localStorage.tokens || '[]')
+        this.tokenBalances = Array(this.tokens.length).fill(0)
         initWallet(this).then(() => {
             this.working = true
             this.update()
@@ -98,11 +121,30 @@ const Index = {
         send: function () {
             this.$router.push({ name: 'send' })
         },
+        addToken: function () {
+            this.$router.push({ name: 'addtoken' })
+        },
+        sendToken: function (token) {
+            this.$router.push({ name: 'sendtoken', params: { 'addr': token.addr } })
+        },
+        hideToken: function (id) {
+            this.tokens.splice(id, 1)
+            this.tokenBalances.splice(id, 1)
+            localStorage.tokens = JSON.stringify(this.tokens)
+        },
         update: function (setnxt = true) {
             tcoin.getBalance(this.eaddr).then(balance => {
                 this.balance = balance
                 if (this.working && setnxt) setTimeout(this.update, 3000)
             })
+            for (const i in this.tokens) {
+                const token = this.tokens[i]
+                const code = codegen.genWorker('read', token.addr, 'balanceOf', 'ia', 0, [this.eaddr])
+                tcoin.runViewCode(this.eaddr, code).then(res => {
+                    if (this.tokens[i].addr == token.addr)
+                        this.$set(this.tokenBalances, i, codegen.parseResult('i', res.data))
+                })
+            }
             tcoin.getAccountTransactions(this.eaddr, 1).then(data => {
                 const lim = 10
                 const txs = data.txs
@@ -170,6 +212,80 @@ const Index = {
     }
 }
 
+const AddToken = {
+    template: `
+    <v-col>
+        <h2>Add token</h2>
+        <v-text-field v-model="tokenAddr" label="Token address" :rules="[addrCheck]"></v-text-field>
+        <v-text-field v-model="name" label="Name"></v-text-field>
+        <v-text-field v-model="symbol" label="Symbol"></v-text-field>
+        <v-btn class="no-upper-case" outlined @click="submit"> Add </v-btn>
+    </v-col>
+    `,
+    data: function () {
+        return {
+            privkey: '',
+            pubkey: '',
+            addr: '',
+            eaddr: '',
+            tokenAddr: '',
+            name: '',
+            symbol: '',
+            decimals: -1,
+        }
+    },
+    created: function () {
+        initWallet(this)
+    },
+    methods: {
+        addrCheck: function () {
+            if (this.tokenAddr == '') return 'address cannot be empty'
+            try {
+                tcoin.decodeAddr(this.tokenAddr)
+            } catch (e) {
+                return e
+            }
+            tcoin.runViewCode(this.eaddr, codegen.genWorker('read', this.tokenAddr, 'name', 'c', 0, [])).then(res => {
+                this.name = codegen.parseResult('c', res.data)
+            })
+            tcoin.runViewCode(this.eaddr, codegen.genWorker('read', this.tokenAddr, 'symbol', 'c', 0, [])).then(res => {
+                this.symbol = codegen.parseResult('c', res.data)
+            })
+            tcoin.runViewCode(this.eaddr, codegen.genWorker('read', this.tokenAddr, 'decimals', 'i', 0, [])).then(res => {
+                this.decimals = codegen.parseResult('i', res.data)
+            })
+            return true
+        },
+        submit: function () {
+            try {
+                tcoin.decodeAddr(this.tokenAddr)
+            } catch (e) {
+                return
+            }
+            if (this.name == '' || this.symbol == '' || this.decimals == -1) return
+            const tokens = JSON.parse(localStorage.tokens || '[]')
+            let flag = false
+            const add = {
+                addr: this.tokenAddr,
+                name: this.name,
+                symbol: this.symbol,
+                decimals: this.decimals,
+            }
+            for (let i = 0; i < tokens.length; i++) {
+                if (tokens[i].addr == this.tokenAddr) {
+                    tokens[i] = add
+                    flag = true
+                }
+            }
+            if (!flag) {
+                tokens.push(add)
+            }
+            localStorage.tokens = JSON.stringify(tokens)
+            this.$router.push({ name: 'index' })
+        }
+    }
+}
+
 const Send = {
     template: `
     <v-col>
@@ -231,6 +347,72 @@ const Send = {
                             hash: hash
                         }
                         window.msgCache[hash] = this.msg
+                    })
+                })
+            })
+        }
+    }
+}
+
+const SendToken = {
+    template: `
+    <v-col>
+        <h2>Send {{ token.name }}</h2>
+        <v-text-field v-model="toAddr" label="Recipient address" :rules="[addrCheck]"></v-text-field>
+        <v-text-field v-model="amount" label="Amount" :suffix="token.symbol"></v-text-field>
+        <v-btn class="no-upper-case" outlined @click="submit"> Send </v-btn>
+    </v-col>
+    `,
+    data: function () {
+        return {
+            privkey: '',
+            pubkey: '',
+            addr: '',
+            eaddr: '',
+            toAddr: '',
+            amount: 0,
+            msg: '',
+            token: '',
+        }
+    },
+    created: function () {
+        initWallet(this)
+        const tokens = JSON.parse(localStorage.tokens || '[]')
+        for (const token of tokens) {
+            if (token.addr == this.$route.params.addr) {
+                this.token = token
+            }
+        }
+    },
+    methods: {
+        addrCheck: function () {
+            if (this.toAddr == '') return 'recipient cannot be empty'
+            try {
+                tcoin.decodeAddr(this.toAddr)
+            } catch (e) {
+                return e
+            }
+            return true
+        },
+        submit: function () {
+            const intAmount = Math.floor(this.amount * Math.pow(10, this.token.decimals))
+            tcoin.getNonce(this.eaddr).then(nonce => {
+                const tx = {
+                    type: 2,
+                    pubkey: this.pubkey,
+                    toAddr: tcoin.nullAddr,
+                    value: 0,
+                    fee: 0,
+                    nonce: nonce,
+                    data: codegen.genWorker('write', this.token.addr, 'transfer', 'iai', 0, [this.toAddr, intAmount])
+                }
+                tcoin.estimateGas(tx).then(gas => {
+                    tx.gasLimit = gas
+                    tcoin.signTx(tx, this.privkey).then(sig => {
+                        tx.sig = sig
+                        tcoin.sendTransaction(tx).then(_ => {
+                            this.$router.push({ name: 'index' })
+                        })
                     })
                 })
             })
@@ -359,6 +541,8 @@ const router = new VueRouter({
         { path: '/', component: Index, name: 'index' },
         { path: '/create', component: CreateWallet, name: 'create_wallet' },
         { path: '/send', component: Send, name: 'send' },
+        { path: '/sendtoken/:addr', component: SendToken, name: 'sendtoken' },
+        { path: '/addtoken', component: AddToken, name: 'addtoken' },
         { path: '/inject', component: Inject, name: 'inject' },
     ]
 })
