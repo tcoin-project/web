@@ -282,13 +282,13 @@ const Inject = {
     created: function () {
         initWallet(this)
         window.addEventListener("message", (event) => {
+            if (event.data.target != 'tcoin-wallet') return
             if (this.hexOrigin == '') {
                 this.origin = event.origin
                 const enc = new TextEncoder()
                 this.hexOrigin = toHex(enc.encode(this.origin))
             }
             if (event.origin != this.origin) return
-            if (event.data.target != 'tcoin-wallet') return
             const data = event.data.data
             const method = data.method
             const arg = data.arg
