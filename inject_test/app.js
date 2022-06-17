@@ -3,40 +3,83 @@ const api = axios.create({ baseURL: 'https://tcrpc2.mcfx.us/' });
 const opts = { dark: false };
 Vue.use(Vuetify);
 
+Vue.component('wallet-connect', WalletConnect)
+
 const Index = {
     template: `
     <v-col>
-        <p><v-btn class="no-upper-case" outlined @click="connect"> Connect Wallet </v-btn></p>
+        <div style="display:inline-block;width:100%">
+            <span style="float:left"><h2>Wrapped TCoin</h2></span>
+            <span style="float:right"><wallet-connect @change="changeWallet" ref="wallet"></wallet-connect></span>
+        </div>
+        <p> Wallet Balance: {{ tcoin.utils.showCoin(balance) }} TCoin </p>
+        <p> Wrapped Balance: {{ tcoin.utils.showCoin(wbalance) }} WTCoin </p>
+        <v-text-field v-model="amount" label="Amount" suffix="TCoin"></v-text-field>
+        <p>
+            <v-btn class="no-upper-case" outlined @click="wrap"> Wrap </v-btn>
+            <v-btn class="no-upper-case" outlined @click="unwrap"> Unwrap </v-btn>
+        </p>
+        <!--<p><v-btn class="no-upper-case" outlined @click="connect"> Connect Wallet </v-btn></p>
         <p><v-btn class="no-upper-case" outlined @click="disconnect"> Disconnect Wallet </v-btn></p>
-        <p><v-btn class="no-upper-case" outlined @click="deposit"> Deposit 1 TCoin to WTCoin </v-btn></p>
-        <p><v-btn class="no-upper-case" outlined @click="withdraw"> Withdraw 1 TCoin to WTCoin </v-btn></p>
+        <p><v-btn class="no-upper-case" outlined @click="withdraw"> Withdraw 1 TCoin to WTCoin </v-btn></p>-->
     </v-col>
     `,
+    data: function () {
+        return {
+            wtcoin: 'tcoin2te7Jd2FURuw8VR96gdZd2qbCerSSUb7dnLAPAyS7sGLDM',
+            addr: '',
+            balance: 0,
+            wbalance: 0,
+            amount: 0,
+        }
+    },
+    computed: {
+        intAmount: function () {
+            return Math.floor(this.amount * 1000000000)
+        }
+    },
+    created: function () {
+        this.update(true)
+    },
     methods: {
-        connect: function () {
-            wallet.connect().then(addr => {
-                console.log(addr)
+        changeWallet: function (addr) {
+            this.addr = addr
+            this.update(false)
+        },
+        update: function (setnxt = true) {
+            if (this.addr == '') {
+                this.balance = 0
+                this.wbalance = 0
+                if (setnxt) setTimeout(this.update, 3000)
+                return
+            }
+            tcoin.getBalance(this.addr).then(balance => {
+                this.balance = balance
+                if (setnxt) setTimeout(this.update, 3000)
+            })
+            const code = codegen.genWorker('read', this.wtcoin, 'balanceOf', 'ia', 0, [this.addr])
+            tcoin.runViewCode(this.addr, code).then(res => {
+                this.wbalance = codegen.parseResult('i', res.data)
             })
         },
-        disconnect: function () {
-            wallet.disconnect()
-        },
-        deposit: function () {
-            wallet.approve({
+        wrap: function () {
+            const code = codegen.genWorker('write', this.wtcoin, 'mint', 'i', this.intAmount, [])
+            this.$refs.wallet.approve({
                 type: 2,
-                toAddr: tcoin.decodeAddr('tcoin2K3n5t4wSaF5mj27Tw9vStXWLWyRjjiH5Cp3CFLpKVCr1d'),
+                toAddr: tcoin.nullAddr,
                 value: 0,
-                data: fromHex('138400001705000013058505930280fb93d21200e7800200930405006f00400013850400b7d5896f9b85956113060000b7d69a3b9b8606a037d79a3b1b0707a0930701b513888700930200fb93d21200e7800200930004006780000071149a92dfbd9be935292722045f9db6b6bcba6d7c09ffb191d8d9b4ea04a46c'),
+                data: code,
             }).then(tx => {
                 tcoin.sendTransaction(tx)
             })
         },
-        withdraw: function () {
-            wallet.approve({
+        unwrap: function () {
+            const code = codegen.genWorker('write', this.wtcoin, 'burn', 'ii', 0, [this.intAmount])
+            this.$refs.wallet.approve({
                 type: 2,
-                toAddr: tcoin.decodeAddr('tcoin2K3n5t4wSaF5mj27Tw9vStXWLWyRjjiH5Cp3CFLpKVCr1d'),
+                toAddr: tcoin.nullAddr,
                 value: 0,
-                data: fromHex('138400001705000013058503930280fb93d21200e7800200930405006f0040003715f9511b058509b7d59a3b9b8505a0e7800400930004006780000071149a92dfbd9be935292722045f9db6b6bcba6d7c09ffb191d8d9b4ea04a46c'),
+                data: code,
             }).then(tx => {
                 tcoin.sendTransaction(tx)
             })

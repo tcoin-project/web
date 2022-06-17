@@ -37,7 +37,7 @@ const CreateWallet = {
     methods: {
         submit: function () {
             localStorage.privkey = this.privkeyHex
-            this.$router.push({ name: 'index' })
+            this.$router.back()
         }
     }
 }
@@ -54,7 +54,7 @@ const Index = {
         <p> Balance: {{ tcoin.utils.showCoin(balance) }} TCoin <v-btn text small @click="send" class="no-upper-case">Send</v-btn></p>
         <v-card v-for="tx in stxs">
             <v-card-title>
-                <div style="display:inline-box;width:100%">
+                <div style="display:inline-block;width:100%">
                     <span :style="'float:left;color:' + tx.colorMain">{{ tx.op }}</span>
                     <span :style="'float:right;color:' + tx.color">{{ tx.prefix + tcoin.utils.showCoin(tx.value) }} TCoin</span>
                 </div>
