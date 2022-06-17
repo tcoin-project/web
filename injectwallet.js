@@ -21,7 +21,7 @@ const Wallet = function () {
     window.addEventListener('message', (event) => {
         if (event.origin != walletOrigin) return
         if (event.data.target != 'tcoin-wallet') return
-        if (typeof (popup) != 'undefined' && event.source.name != popup.name) return
+        //if (typeof (popup) != 'undefined' && event.source.name != popup.name) return
         const data = event.data.data
         const method = data.method
         const arg = data.arg
