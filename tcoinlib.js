@@ -521,6 +521,10 @@ const codegen = (function () {
                     later[rest.length] = lin
                     rest.push(0)
                     break
+                case 'bne':
+                    later[rest.length] = lin
+                    rest.push(0)
+                    break
                 case 'ret':
                     rest.push(genIType(b('1100111'), 0, b('000'), 1, 0))
                     break
@@ -533,6 +537,11 @@ const codegen = (function () {
                 case 'lb': {
                     const [offset, rs1] = parseMem(args[1])
                     rest.push(genIType(b('0000011'), reg(args[0]), b('000'), rs1, offset))
+                    break
+                }
+                case 'ld': {
+                    const [offset, rs1] = parseMem(args[1])
+                    rest.push(genIType(b('0000011'), reg(args[0]), b('011'), rs1, offset))
                     break
                 }
                 case 'sb': {
@@ -569,6 +578,11 @@ const codegen = (function () {
                 case 'beq': {
                     const diff = (labels[args[2]] - p) * 4
                     rest[p] = genBType(b('1100011'), b('000'), reg(args[0]), reg(args[1]), diff)
+                    break
+                }
+                case 'bne': {
+                    const diff = (labels[args[2]] - p) * 4
+                    rest[p] = genBType(b('1100011'), b('001'), reg(args[0]), reg(args[1]), diff)
                     break
                 }
                 default:
@@ -669,6 +683,13 @@ const codegen = (function () {
                 'li t0, -80',
                 'srli t0, t0, 1',
                 'jalr t0',
+                'lb t1, 0(a5)',
+                'bne t1, zero, success',
+                'mv a0, a6',
+                'li t0, -88',
+                'srli t0, t0, 1',
+                'jalr t0',
+                'success:',
             )
         }
         if (op == 'read') {
@@ -695,6 +716,20 @@ const codegen = (function () {
                     'sub a2, a2, a1',
                     'sd a2, 0(a0)',
                 )
+            } else if (argSpec[0] == 'a') {
+                s.push(
+                    'ld t0, 0(a0)',
+                    'sd t0, -32(sp)',
+                    'ld t0, 8(a0)',
+                    'sd t0, -24(sp)',
+                    'ld t0, 16(a0)',
+                    'sd t0, -16(sp)',
+                    'ld t0, 24(a0)',
+                    'sd t0, -8(sp)',
+                    'addi a0, sp, -40',
+                    'li t0, 32',
+                    'sd t0, 0(a0)',
+                )
             }
         }
         s.push(...final)
@@ -706,6 +741,8 @@ const codegen = (function () {
             return bytesToUint64(data)
         } else if (r == 'c') {
             return tcoin.utils.showUtf8(data)
+        } else if (r == 'a') {
+            return tcoin.encodeAddr(data)
         }
     }
 
