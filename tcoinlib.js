@@ -750,5 +750,8 @@ const codegen = (function () {
         asmToBytes: asmToBytes,
         genWorker: genWorker,
         parseResult: parseResult,
+        selector: fnv1a_32,
+        asAsmByteArr: asAsmByteArr,
+        int64ToBytes: int64ToBytes,
     }
 })()
